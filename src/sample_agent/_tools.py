@@ -66,5 +66,5 @@ def get_current_date_time() -> dict[str, object]:
         "get_current_date_time response: %s",
         json.dumps(result, ensure_ascii=False, indent=2),
     )
-    
+
     return result

@@ -89,5 +89,5 @@ def get_semantic_chunks_from_document(
         "get_semantic_chunks_from_document response: %s",
         json.dumps(result, ensure_ascii=False, indent=2),
     )
-    
+
     return result

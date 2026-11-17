@@ -160,8 +160,8 @@ async def _run_agent(
         models = [
             "gpt-4o",
             "granite4.1:3b",
-            "granite4.1:8b",
-            "gemma4:12b",
+            # "granite4.1:8b",
+            # "gemma4:12b",
         ]
 
         for model in models:

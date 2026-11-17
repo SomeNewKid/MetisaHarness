@@ -11,10 +11,13 @@ from mcp.types import Tool
 
 from metisa_common.mcp_helper import create_tool
 
+from ._guardrails import apply_guardrails
+from .guardrails import GuardrailMetadata
 from .models import AgentDefinition, RegisteredTool, ToolCall
 
 
 async def invoke_tool_call(
+    agent: AgentDefinition,
     tool_registry: dict[str, RegisteredTool],
     tool_call: ToolCall,
 ) -> str:
@@ -29,9 +32,49 @@ async def invoke_tool_call(
     if not isinstance(arguments, dict):
         raise ValueError("Tool arguments must be a JSON object.")
 
-    validate(instance=arguments, schema=registered.tool.input_schema)
+    metadata = GuardrailMetadata(
+        agent_name=agent.name,
+        tool_name=tool_call.name,
+    )
 
-    return await registered.invoke(arguments)
+    before_tool_guardrails = (
+        guardrail
+        for plugin in agent.guardrail_plugins
+        for guardrail in plugin.before_tool
+    )
+
+    arguments = await apply_guardrails(
+        before_tool_guardrails,
+        metadata=metadata,
+        payload=arguments,
+    )
+
+    validate(
+        instance=arguments,
+        schema=registered.tool.input_schema,
+    )
+
+    result = await registered.invoke(arguments)
+
+    after_tool_guardrails = (
+        guardrail
+        for plugin in agent.guardrail_plugins
+        for guardrail in plugin.after_tool
+    )
+
+    result = await apply_guardrails(
+        after_tool_guardrails,
+        metadata=metadata,
+        payload=result,
+    )
+
+    if registered.tool.output_schema is not None:
+        validate(
+            instance=result,
+            schema=registered.tool.output_schema,
+        )
+
+    return json.dumps(result, allow_nan=False)
 
 
 async def get_tool_registry(
@@ -72,11 +115,11 @@ async def get_tool_registry(
 
 
 def _register_local_tool(
-    function: Callable[..., object],
+    function: Callable[..., dict[str, object]],
 ) -> RegisteredTool:
     tool = create_tool(function)
 
-    async def _invoke(arguments: dict[str, object]) -> str:
+    async def _invoke(arguments: dict[str, object]) -> dict[str, object]:
         # Run synchronous functions outside the event-loop thread.
         # Calling an async function here returns its corouting.
         result = await asyncio.to_thread(function, **arguments)
@@ -87,7 +130,7 @@ def _register_local_tool(
         if tool.output_schema is not None:
             validate(instance=result, schema=tool.output_schema)
 
-        return json.dumps(result, allow_nan=False)
+        return result
 
     return RegisteredTool(tool=tool, invoke=_invoke)
 
@@ -96,7 +139,7 @@ def _register_mcp_tool(
     server: Client,
     tool: Tool,
 ) -> RegisteredTool:
-    async def _invoke(arguments: dict[str, object]) -> str:
+    async def _invoke(arguments: dict[str, object]) -> dict[str, object]:
         result = await server.call_tool(tool.name, arguments)
 
         if result.is_error:
@@ -111,6 +154,6 @@ def _register_mcp_tool(
         if tool.output_schema is not None:
             validate(instance=payload, schema=tool.output_schema)
 
-        return json.dumps(payload, allow_nan=False)
+        return payload
 
     return RegisteredTool(tool=tool, invoke=_invoke)

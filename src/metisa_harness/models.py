@@ -9,6 +9,8 @@ from typing import Literal, Protocol
 from mcp import Client
 from mcp.types import Tool
 
+from .guardrails import Guardrail
+
 
 @dataclass(frozen=True)
 class AgentDefinition:
@@ -17,8 +19,9 @@ class AgentDefinition:
     name: str
     model: str
     instructions: str
-    tools: list[Callable[..., object]] = field(default_factory=list)
+    tools: list[Callable[..., dict[str, object]]] = field(default_factory=list)
     mcp_clients: list[Client] = field(default_factory=list)
+    guardrail_plugins: tuple[GuardrailPlugin, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.name.strip():
@@ -51,7 +54,7 @@ class RegisteredTool:
     """Represent a tool registered with the Metisa Harness."""
 
     tool: Tool
-    invoke: Callable[[dict[str, object]], Awaitable[str]]
+    invoke: Callable[[dict[str, object]], Awaitable[dict[str, object]]]
 
 
 @dataclass(frozen=True)
@@ -97,3 +100,19 @@ class ContextBuilder(Protocol):
     ) -> ModelContext:
         """Build the context for presentation to the model."""
         ...
+
+
+@dataclass(frozen=True)
+class GuardrailPlugin:
+    """Package related guardrails for reuse across agents."""
+
+    name: set
+
+    before_run: tuple[Guardrail[str], ...] = ()
+    after_run: tuple[Guardrail[str], ...] = ()
+
+    before_model: tuple[Guardrail[ModelContext], ...] = ()
+    after_model: tuple[Guardrail[LlmMessage], ...] = ()
+
+    before_tool: tuple[Guardrail[dict[str, object]], ...] = ()
+    after_tool: tuple[Guardrail[dict[str, object]], ...] = ()
