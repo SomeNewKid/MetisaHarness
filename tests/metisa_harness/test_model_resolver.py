@@ -53,7 +53,7 @@ def test_run_prefers_installed_ollama_models(
 
     result = asyncio.run(AgentHarness.run(replace(agent, model=requested), input="Hi"))
 
-    assert result.final_text == "Local answer."
+    assert result.final_output == "Local answer."
     local.models.list.assert_awaited_once_with()
     local.chat.completions.create.assert_awaited_once()
     assert local.chat.completions.create.await_args.kwargs["model"] == expected
@@ -75,7 +75,7 @@ def test_run_falls_back_to_online_model_when_not_installed(
 
     result = asyncio.run(AgentHarness.run(replace(agent, model=requested), input="Hi"))
 
-    assert result.final_text == "Online answer."
+    assert result.final_output == "Online answer."
     local.models.list.assert_awaited_once_with()
     local.chat.completions.create.assert_not_awaited()
     online.chat.completions.create.assert_awaited_once()

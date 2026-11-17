@@ -42,7 +42,7 @@ def test_run_uses_supplied_llm(agent: AgentDefinition, response: str) -> None:
     resolver.assert_not_called()
     assert llm.calls == [([LlmMessage(role="user", content="Hello.")], [])]
     assert result == RunResult(
-        final_text=response,
+        final_output=response,
         messages=(LlmMessage(role="user", content="Hello."), _answer(response)),
     )
 
@@ -56,7 +56,7 @@ def test_run_resolves_llm_when_not_supplied(agent: AgentDefinition) -> None:
 
     resolver.assert_awaited_once_with(agent)
     assert llm.calls == [([LlmMessage(role="user", content="Hello.")], [])]
-    assert result.final_text == "Resolved response."
+    assert result.final_output == "Resolved response."
 
 
 def test_run_raises_when_llm_unavailable(agent: AgentDefinition) -> None:
@@ -128,7 +128,7 @@ def test_run_preserves_history_across_batches_and_repeated_tool_calls(
         AgentHarness.run(definition, input="Compare.", llm=llm, max_turns=3)
     )
 
-    assert result.final_text == "Done."
+    assert result.final_output == "Done."
     assert events == ["first:1", "second:2", "first:3"]
     initial = [LlmMessage(role="user", content="Compare.")]
     after_batch = initial + [
@@ -203,7 +203,7 @@ def test_run_keeps_ollama_provider_through_tool_round_trip(
 
     result = asyncio.run(AgentHarness.run(definition, input="Lookup.", max_turns=2))
 
-    assert result.final_text == "The value is 42."
+    assert result.final_output == "The value is 42."
     assert events == ["lookup:1"]
     local.models.list.assert_awaited_once_with()
     assert local.chat.completions.create.await_count == 2

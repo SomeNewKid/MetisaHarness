@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from copy import deepcopy
+from dataclasses import replace
 
 from ._context_manager import FullHistoryContextBuilder
 from ._guardrails import apply_guardrails
@@ -43,6 +45,10 @@ class AgentHarness:
 
         tool_registry = await get_tool_registry(agent)
 
+        output_schema = None
+        if agent.output_type is not None:
+            output_schema = agent.output_type.model_json_schema()
+
         guardrail_metadata = GuardrailMetadata(
             agent_name=agent.name,
         )
@@ -69,6 +75,10 @@ class AgentHarness:
                 agent=agent,
                 tool_registry=tool_registry,
                 messages=messages,
+            )
+            model_context = replace(
+                model_context,
+                output_schema=output_schema,
             )
 
             before_model_guardrails = (
@@ -108,21 +118,39 @@ class AgentHarness:
                 if final_text is None or not final_text.strip():
                     raise RuntimeError("The model returned no final text.")
 
+                if agent.output_type is None:
+                    final_output = final_text
+                else:
+                    final_output = json.loads(final_text)
+                    if not isinstance(final_output, dict):
+                        raise TypeError(
+                            "The model's final output must be a JSON object."
+                        )
+
                 after_run_guardrails = (
                     guardrail
                     for plugin in agent.guardrail_plugins
                     for guardrail in plugin.after_run
                 )
 
-                final_text = await apply_guardrails(
+                final_output = await apply_guardrails(
                     after_run_guardrails,
                     metadata=guardrail_metadata,
-                    payload=final_text,
+                    payload=final_output,
                 )
+
+                if agent.output_type is not None:
+                    if not isinstance(final_output, dict):
+                        raise TypeError("An output guardrail returned the wrong type.")
+
+                    final_output = agent.output_type.model_validate(final_output)
+                else:
+                    if not isinstance(final_output, str) or not final_output.strip():
+                        raise TypeError("An output guardrail returned invalid text.")
 
                 history = tuple(deepcopy(messages))
 
-                return RunResult(final_text=final_text, messages=history)
+                return RunResult(final_output=final_output, messages=history)
 
             for tool_call in response.tool_calls:
                 output = await invoke_tool_call(agent, tool_registry, tool_call)

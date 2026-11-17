@@ -29,6 +29,9 @@ from metisa_harness import (
     AgentHarness,
 )
 
+from ._guardrails import (
+    create_product_guardrail_plugin,
+)
 from ._helper import (
     print_elapsed_time,
     print_failure,
@@ -37,11 +40,15 @@ from ._helper import (
 from ._mcp_server import (
     get_mcp_server,
 )
+from ._models import (
+    ProductDetails,
+)
 from ._telemetry import (
     initialize_tracing,
 )
 from ._tools import (
     get_current_date_time,
+    get_product_details,
 )
 
 _VERBOSE_LOGGING = False
@@ -150,7 +157,7 @@ async def _run_agent(
         prompt_count = 0
         if not prompt:
             if Capability.INTERACTIVE not in specification.capabilities:
-                prompt = "What is the time?"
+                prompt = 'Look up product code "chair".'
         while not prompt:
             prompt_count += 1
             if prompt_count > 3:
@@ -174,6 +181,8 @@ async def _run_agent_model(
 ) -> None:
     mcp_server = get_mcp_server()
 
+    guardrail_plugin = create_product_guardrail_plugin()
+
     async with Client(mcp_server) as mcp_client:
         agent = AgentDefinition(
             name="sample_agent",
@@ -185,13 +194,18 @@ async def _run_agent_model(
                 Discover available filenames with get_list_of_available_documents,
                 then retrieve relevant excerpts with get_semantic_chunks_from_document.
                 Check the documents before asking the user to supply a filename.
+                For product questions, call get_product_details,
+                passing the product code exactly as supplied by the user,
+                including its capitalization and surrounding spaces.
                 Do not guess the answer if it is not available in the documents 
                 or through the tools.
                 If you cannot find the answer, explain what documents were checked and
                 which tools were used, before stating that the answer is not available.
                 """,
-            tools=[get_current_date_time],
+            tools=[get_current_date_time, get_product_details],
             mcp_clients=[mcp_client],
+            guardrail_plugins=(guardrail_plugin,),
+            # output_type=ProductDetails,
         )
 
         print()
@@ -201,8 +215,18 @@ async def _run_agent_model(
         with print_elapsed_time():
             try:
                 result = await AgentHarness.run(agent, input=prompt)
-                if result.final_text:
-                    print_success(result.final_text)
+                if result.final_output:
+                    if agent.output_type is ProductDetails:
+                        if isinstance(result.final_output, ProductDetails):
+                            product_code = result.final_output.product_code
+                            product_name = result.final_output.product_name
+                            print_success(
+                                f"ProductDetails '{product_code}', '{product_name}'"
+                            )
+                        else:
+                            print_failure("Final output of wrong type.")
+                    else:
+                        print_success(result.final_output)
                 else:
                     raise RuntimeError("No final text returned.")
             except Exception as error:

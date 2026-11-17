@@ -8,6 +8,7 @@ from typing import Literal, Protocol
 
 from mcp import Client
 from mcp.types import Tool
+from pydantic import BaseModel
 
 from .guardrails import Guardrail
 
@@ -22,6 +23,7 @@ class AgentDefinition:
     tools: list[Callable[..., dict[str, object]]] = field(default_factory=list)
     mcp_clients: list[Client] = field(default_factory=list)
     guardrail_plugins: tuple[GuardrailPlugin, ...] = ()
+    output_type: type[BaseModel] | None = None
 
     def __post_init__(self) -> None:
         if not self.name.strip():
@@ -36,7 +38,7 @@ class AgentDefinition:
 class RunResult:
     """Contain the final answer and conversation from a completed run."""
 
-    final_text: str
+    final_output: str | BaseModel
     messages: tuple[LlmMessage, ...]
 
 
@@ -86,6 +88,7 @@ class ModelContext:
     instructions: str
     messages: list[LlmMessage]
     tools: list[Tool]
+    output_schema: dict[str, object] | None = None
 
 
 class ContextBuilder(Protocol):
@@ -106,10 +109,10 @@ class ContextBuilder(Protocol):
 class GuardrailPlugin:
     """Package related guardrails for reuse across agents."""
 
-    name: set
+    name: str
 
     before_run: tuple[Guardrail[str], ...] = ()
-    after_run: tuple[Guardrail[str], ...] = ()
+    after_run: tuple[Guardrail[str | dict[str, object]], ...] = ()
 
     before_model: tuple[Guardrail[ModelContext], ...] = ()
     after_model: tuple[Guardrail[LlmMessage], ...] = ()

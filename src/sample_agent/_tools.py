@@ -10,7 +10,7 @@ from metisa_common.mcp_helper import with_output_schema
 
 _LOGGER = logging.getLogger(__name__)
 
-_TOOL_RESULT_SCHEMA = {
+_DATE_TIME_RESULT_SCHEMA = {
     "type": "object",
     "properties": {
         "year": {"type": "integer"},
@@ -37,8 +37,24 @@ _TOOL_RESULT_SCHEMA = {
     "additionalProperties": False,
 }
 
+_PRODUCT_RESULT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "product_code": {"type": "string"},
+        "product_name": {"type": "string"},
+    },
+    "required": ["product_code", "product_name"],
+    "additionalProperties": False,
+}
 
-@with_output_schema(_TOOL_RESULT_SCHEMA)
+_PRODUCT_NAMES = {
+    "LAMP": "  desk lamp  ",
+    "CHAIR": "  office chair  ",
+    "INTERNAL": "  internal prototype   ",
+}
+
+
+@with_output_schema(_DATE_TIME_RESULT_SCHEMA)
 def get_current_date_time() -> dict[str, object]:
     """
     Return the current local date, time, day of the week, and UTC offset.
@@ -64,6 +80,26 @@ def get_current_date_time() -> dict[str, object]:
 
     _LOGGER.debug(
         "get_current_date_time response: %s",
+        json.dumps(result, ensure_ascii=False, indent=2),
+    )
+
+    return result
+
+
+@with_output_schema(_PRODUCT_RESULT_SCHEMA)
+def get_product_details(
+    product_code: str,
+) -> dict[str, object]:
+    """Look up a product using its product code."""
+    _LOGGER.debug("get_product_details request")
+
+    result: dict[str, object] = {
+        "product_code": product_code,
+        "product_name": _PRODUCT_NAMES.get(product_code, "  unknown product   "),
+    }
+
+    _LOGGER.debug(
+        "get_product_details response: %s",
         json.dumps(result, ensure_ascii=False, indent=2),
     )
 

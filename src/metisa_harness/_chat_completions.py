@@ -45,10 +45,23 @@ class OpenAiLlmClient:
     ) -> LlmMessage:
         tool_definitions = await self._create_tool_definitions(model_context.tools)
 
+        instructions = model_context.instructions
+
+        if model_context.output_schema is not None:
+            schema_json = json.dumps(model_context.output_schema, ensure_ascii=False)
+            instructions += (
+                "\n\n"
+                "When giving your final answer, return only JSON "
+                "matching the following following schema. "
+                "Do not include Markdown fences or  explanatory prose."
+                "\n"
+                f"{schema_json}"
+            )
+
         request_messages: list[ChatCompletionMessageParam] = [
             {
                 "role": "system",
-                "content": model_context.instructions,
+                "content": instructions,
             }
         ]
         converted_messages = self._create_messages(model_context.messages)

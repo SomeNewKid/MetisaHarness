@@ -59,7 +59,7 @@ def test_run_sends_openai_tool_definitions(
         {"role": "system", "content": agent.instructions},
         {"role": "user", "content": "Hello."},
     ]
-    assert result.final_text == "Hello."
+    assert result.final_output == "Hello."
     if include_tools:
         local = create_tool(_get_current_date_and_time)
         assert request["tools"] == [
@@ -116,7 +116,7 @@ def test_run_round_trips_openai_tool_calls_and_results(agent: AgentDefinition) -
         factory.return_value.__aenter__.return_value = client
         result = asyncio.run(AgentHarness.run(definition, input="Lookup.", max_turns=2))
 
-    assert result.final_text == "Done."
+    assert result.final_output == "Done."
     assert events == ["local:7"]
     server.call_tool.assert_awaited_once_with("remote", {"query": "x"})
     assert client.chat.completions.create.await_count == 2

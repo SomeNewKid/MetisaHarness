@@ -141,7 +141,7 @@ def test_run_invokes_local_tool_and_returns_result_to_model(
     )
 
     assert events == ["lookup:7"]
-    assert result.final_text == "The value is 42."
+    assert result.final_output == "The value is 42."
     assert llm.calls[0][0] == [LlmMessage(role="user", content="Look it up.")]
     assert llm.calls[1][0] == [
         LlmMessage(role="user", content="Look it up."),
@@ -175,7 +175,7 @@ def test_run_routes_mcp_calls_to_the_correct_tool_and_server(
 
     result = asyncio.run(AgentHarness.run(definition, input="Lookup.", llm=llm))
 
-    assert result.final_text == "Done."
+    assert result.final_output == "Done."
     assert server.call_tool.await_args_list == [
         call("first", {"query": "first"}),
         call("second", {"query": "second"}),
