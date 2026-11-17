@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import json
+import logging
 from typing import Annotated
 
 from pydantic import Field
 
 from metisa_common.mcp_helper import with_output_schema
+
+_LOGGER = logging.getLogger(__name__)
+
 
 _TOOL_RESULT_SCHEMA = {
     "type": "object",
@@ -68,7 +73,7 @@ def get_semantic_chunks_from_document(
 
     Use a filename returned by get_list_of_available_documents.
     """
-    print(f"Call to get_semantic_chunks_from_document('{filename}')")
+    _LOGGER.debug("get_semantic_chunks_from_document request")
     chunks: list[str] = []
     if filename == "Employee handbook.pdf":
         if "values" in prompt.lower():
@@ -80,4 +85,9 @@ def get_semantic_chunks_from_document(
         "chunks": chunks,
     }
 
+    _LOGGER.debug(
+        "get_semantic_chunks_from_document response: %s",
+        json.dumps(result, ensure_ascii=False, indent=2),
+    )
+    
     return result

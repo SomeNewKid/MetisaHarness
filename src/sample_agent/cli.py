@@ -44,6 +44,8 @@ from ._tools import (
     get_current_date_time,
 )
 
+_VERBOSE_LOGGING = False
+
 root_directory = Path(__file__).parent
 metisa_json_path = root_directory / "metisa.toml"
 if not metisa_json_path.is_file():
@@ -70,11 +72,17 @@ def main(
     os.environ["METISA_RUN_ID"] = run_id
     os.environ["OTEL_SERVICE_NAME"] = "sample_agent"
 
+    default_logging_level = logging.DEBUG if _VERBOSE_LOGGING else logging.WARNING
+
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.WARNING,
         format="%(levelname)s %(name)s: %(message)s",
     )
-    # logging.getLogger("metisa_harness").setLevel(logging.DEBUG)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpx2").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("metisa_harness").setLevel(default_logging_level)
+    logging.getLogger("sample_agent").setLevel(default_logging_level)
 
     if Capability.OTEL_COLLECTOR in specification.capabilities:
         provider, exporter = initialize_tracing()
@@ -152,8 +160,8 @@ async def _run_agent(
         models = [
             "gpt-4o",
             "granite4.1:3b",
-            # "granite4.1:8b",
-            # "gemma4:12b",
+            "granite4.1:8b",
+            "gemma4:12b",
         ]
 
         for model in models:
@@ -173,9 +181,14 @@ async def _run_agent_model(
             instructions="""
                 Answer the user's question as simply as possible.
                 Provide the answer as plain text, and not as Markdown or JSON.
+                Discover the date and time with get_current_date_time.
                 Discover available filenames with get_list_of_available_documents,
                 then retrieve relevant excerpts with get_semantic_chunks_from_document.
                 Check the documents before asking the user to supply a filename.
+                Do not guess the answer if it is not available in the documents 
+                or through the tools.
+                If you cannot find the answer, explain what documents were checked and
+                which tools were used, before stating that the answer is not available.
                 """,
             tools=[get_current_date_time],
             mcp_clients=[mcp_client],
