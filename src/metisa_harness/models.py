@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
@@ -18,7 +18,7 @@ class AgentDefinition:
     model: str
     instructions: str
     tools: list[Callable[..., object]] = field(default_factory=list)
-    mcp_servers: list[Client] = field(default_factory=list)
+    mcp_clients: list[Client] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not self.name.strip():
@@ -47,6 +47,14 @@ class ToolCall:
 
 
 @dataclass(frozen=True)
+class RegisteredTool:
+    """Represent a tool registered with the Metisa Harness."""
+
+    tool: Tool
+    invoke: Callable[[dict[str, object]], Awaitable[str]]
+
+
+@dataclass(frozen=True)
 class LlmMessage:
     """Represent a conversation message exchanged with a model."""
 
@@ -62,8 +70,30 @@ class LlmClient(Protocol):
     async def complete(
         self,
         *,
-        messages: list[LlmMessage],
-        tools: list[Tool],
+        model_context: ModelContext,
     ) -> LlmMessage:
         """Return one model response, possibly containing tool calls."""
+        ...
+
+
+@dataclass(frozen=True)
+class ModelContext:
+    """Represent the context presented to the model for its next decision."""
+
+    instructions: str
+    messages: list[LlmMessage]
+    tools: list[Tool]
+
+
+class ContextBuilder(Protocol):
+    """Construct the context presented to the model for its next decision."""
+
+    def build(
+        self,
+        *,
+        agent: AgentDefinition,
+        tool_registry: dict[str, RegisteredTool],
+        messages: list[LlmMessage],
+    ) -> ModelContext:
+        """Build the context for presentation to the model."""
         ...

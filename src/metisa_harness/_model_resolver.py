@@ -6,7 +6,7 @@ import httpx2
 from openai import APIConnectionError, AsyncOpenAI
 
 from ._chat_completions import (
-    _OpenAiLlmClient,
+    OpenAiLlmClient,
 )
 from .models import (
     AgentDefinition,
@@ -21,15 +21,15 @@ _ONLINE_MODELS = {
 }
 
 
-async def _get_llm(
+async def get_llm(
     agent: AgentDefinition,
 ) -> LlmClient | None:
-    local_model = await _find_ollama_model(agent.model, _OLLAMA_BASE_URL)
+    """Get the LLM client for the specified agent."""
+    local_model = await find_ollama_model(agent.model, _OLLAMA_BASE_URL)
 
     if local_model is not None:
-        return _OpenAiLlmClient(
+        return OpenAiLlmClient(
             model=local_model,
-            instructions=agent.instructions,
             base_url=_OLLAMA_BASE_URL,
             api_key="ollama",
             trust_env=False,
@@ -44,13 +44,14 @@ async def _get_llm(
             "and has no configured online model mapping."
         )
 
-    return _OpenAiLlmClient(model=online_model, instructions=agent.instructions)
+    return OpenAiLlmClient(model=online_model)
 
 
-async def _find_ollama_model(
+async def find_ollama_model(
     requested_model: str,
     base_url: str,
 ) -> str | None:
+    """Find the specified Ollama model locally."""
     try:
         async with AsyncOpenAI(
             base_url=base_url,

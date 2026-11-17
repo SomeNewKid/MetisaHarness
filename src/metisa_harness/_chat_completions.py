@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import logging
+
 import httpx2
 from mcp.types import Tool
 from openai import AsyncOpenAI, omit
@@ -10,25 +13,26 @@ from openai.types.chat import (
 
 from .models import (
     LlmMessage,
+    ModelContext,
     ToolCall,
 )
 
+_LOGGER = logging.getLogger(__name__)
 
-class _OpenAiLlmClient:
+
+class OpenAiLlmClient:
     """Adapt an OpenAI-compatible Chat Completions endpoint."""
 
     def __init__(
         self,
         *,
         model: str,
-        instructions: str,
         base_url: str = "https://api.openai.com/v1",
         api_key: str | None = None,
         trust_env: bool = True,
         supports_tool_choice: bool = True,
     ) -> None:
         self._model = model
-        self._instructions = instructions
         self._base_url = base_url
         self._api_key = api_key
         self._trust_env = trust_env
@@ -37,19 +41,35 @@ class _OpenAiLlmClient:
     async def complete(
         self,
         *,
-        messages: list[LlmMessage],
-        tools: list[Tool],
+        model_context: ModelContext,
     ) -> LlmMessage:
-        tool_definitions = await self._create_tool_definitions(tools)
+        tool_definitions = await self._create_tool_definitions(model_context.tools)
 
         request_messages: list[ChatCompletionMessageParam] = [
             {
                 "role": "system",
-                "content": self._instructions,
+                "content": model_context.instructions,
             }
         ]
-        converted_messages = self._create_messages(messages)
+        converted_messages = self._create_messages(model_context.messages)
         request_messages.extend(converted_messages)
+
+        tool_choice_label = "omitted"
+        if tool_definitions and self._supports_tool_choice:
+            tool_choice_label = "auto"
+
+        request_details = {
+            "model": self._model,
+            "base_url": self._base_url,
+            "messages": request_messages,
+            "tools": tool_definitions,
+            "tool_choice": tool_choice_label,
+        }
+
+        _LOGGER.debug(
+            "LLM request: %s",
+            json.dumps(request_details, ensure_ascii=False, indent=2),
+        )
 
         async with AsyncOpenAI(
             base_url=self._base_url,
@@ -63,6 +83,12 @@ class _OpenAiLlmClient:
                 tool_choice=(
                     "auto" if tool_definitions and self._supports_tool_choice else omit
                 ),
+            )
+
+            _LOGGER.debug(
+                "LLM response request_id=%s: %s",
+                completion._request_id,
+                completion.model_dump_json(),
             )
 
         if not completion.choices:

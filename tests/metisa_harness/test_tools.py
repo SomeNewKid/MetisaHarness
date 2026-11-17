@@ -42,7 +42,7 @@ def test_run_combines_local_tools_and_paginated_mcp_tools(
     definition = replace(
         agent,
         tools=[_get_current_date_and_time],
-        mcp_servers=[server, other_server],
+        mcp_clients=[server, other_server],
     )
     llm = _ScriptedLlm(_answer("No tools needed."))
 
@@ -71,7 +71,7 @@ def test_run_accepts_an_empty_mcp_tool_list(agent: AgentDefinition) -> None:
     llm = _ScriptedLlm(_answer("Hello."))
 
     asyncio.run(
-        AgentHarness.run(replace(agent, mcp_servers=[server]), input="Hello.", llm=llm)
+        AgentHarness.run(replace(agent, mcp_clients=[server]), input="Hello.", llm=llm)
     )
 
     assert llm.calls[0][1] == []
@@ -90,15 +90,15 @@ def test_run_rejects_duplicate_tool_names(agent: AgentDefinition, source: str) -
     if source == "local":
         definition = replace(agent, tools=[local, local])
     elif source == "local-and-remote":
-        definition = replace(agent, tools=[local], mcp_servers=[server])
+        definition = replace(agent, tools=[local], mcp_clients=[server])
     elif source == "remote-pages":
         server.list_tools.side_effect = [
             ListToolsResult(tools=[duplicate], next_cursor="page-2"),
             ListToolsResult(tools=[duplicate]),
         ]
-        definition = replace(agent, mcp_servers=[server])
+        definition = replace(agent, mcp_clients=[server])
     else:
-        definition = replace(agent, mcp_servers=[server, other_server])
+        definition = replace(agent, mcp_clients=[server, other_server])
     llm = _ScriptedLlm()
 
     with pytest.raises(ValueError, match=f"^Duplicate tool name: {local.__name__}$"):
@@ -118,7 +118,7 @@ def test_run_propagates_mcp_discovery_error(agent: AgentDefinition) -> None:
 
     with pytest.raises(ConnectionError) as caught:
         asyncio.run(
-            AgentHarness.run(replace(agent, mcp_servers=[server]), input="Hi", llm=llm)
+            AgentHarness.run(replace(agent, mcp_clients=[server]), input="Hi", llm=llm)
         )
 
     assert caught.value is error
@@ -171,7 +171,7 @@ def test_run_routes_mcp_calls_to_the_correct_tool_and_server(
         for name in ("first", "second", "third")
     ]
     llm = _ScriptedLlm(_request(*requests), _answer("Done."))
-    definition = replace(agent, mcp_servers=[server, other])
+    definition = replace(agent, mcp_clients=[server, other])
 
     result = asyncio.run(AgentHarness.run(definition, input="Lookup.", llm=llm))
 
@@ -292,7 +292,7 @@ def test_run_propagates_mcp_tool_failures(
 
     with pytest.raises(error_type):
         asyncio.run(
-            AgentHarness.run(replace(agent, mcp_servers=[server]), input="Hi", llm=llm)
+            AgentHarness.run(replace(agent, mcp_clients=[server]), input="Hi", llm=llm)
         )
 
     server.call_tool.assert_awaited_once_with("lookup", {"query": "x"})

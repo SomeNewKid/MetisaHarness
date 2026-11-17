@@ -34,7 +34,7 @@ def test_run_uses_supplied_llm(agent: AgentDefinition, response: str) -> None:
     """A single-turn client receives messages and returns an assistant message."""
     llm = _ScriptedLlm(_answer(response))
 
-    with patch("metisa_harness.harness._get_llm") as resolver:
+    with patch("metisa_harness.harness.get_llm") as resolver:
         result = asyncio.run(
             AgentHarness.run(agent, input="Hello.", llm=llm, max_turns=1)
         )
@@ -51,7 +51,7 @@ def test_run_resolves_llm_when_not_supplied(agent: AgentDefinition) -> None:
     """Client discovery receives the agent when no client is injected."""
     llm = _ScriptedLlm(_answer("Resolved response."))
 
-    with patch("metisa_harness.harness._get_llm", return_value=llm) as resolver:
+    with patch("metisa_harness.harness.get_llm", return_value=llm) as resolver:
         result = asyncio.run(AgentHarness.run(agent, input="Hello."))
 
     resolver.assert_awaited_once_with(agent)
@@ -61,7 +61,7 @@ def test_run_resolves_llm_when_not_supplied(agent: AgentDefinition) -> None:
 
 def test_run_raises_when_llm_unavailable(agent: AgentDefinition) -> None:
     """Missing client discovery produces a clear error."""
-    with patch("metisa_harness.harness._get_llm", return_value=None):
+    with patch("metisa_harness.harness.get_llm", return_value=None):
         with pytest.raises(RuntimeError, match="^LLM not available\\.$"):
             asyncio.run(AgentHarness.run(agent, input="Hello."))
 
@@ -94,7 +94,7 @@ def test_run_rejects_invalid_turn_limit(agent: AgentDefinition, max_turns: int) 
     """An invalid budget is rejected before discovery or model requests."""
     llm = _ScriptedLlm()
     server = _server()
-    definition = replace(agent, mcp_servers=[server])
+    definition = replace(agent, mcp_clients=[server])
 
     with pytest.raises(ValueError, match="^max_turns must be at least 1\\.$"):
         asyncio.run(
@@ -175,7 +175,8 @@ def test_run_returns_a_detached_history_snapshot(agent: AgentDefinition) -> None
     )
 
     assert result.messages == expected
-    retained_messages = llm.complete.await_args_list[0].kwargs["messages"]
+    retained_context = llm.complete.await_args_list[0].kwargs["model_context"]
+    retained_messages = retained_context.messages
     retained_messages.clear()
     request.tool_calls.clear()
 

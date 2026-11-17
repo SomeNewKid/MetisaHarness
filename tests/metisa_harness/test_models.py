@@ -66,7 +66,7 @@ def test_agent_definition_defaults_to_no_tools_or_servers(
 ) -> None:
     """Existing callers can omit both optional collections."""
     assert agent.tools == []
-    assert agent.mcp_servers == []
+    assert agent.mcp_clients == []
 
 
 def test_agent_definition_defaults_are_independent(agent: AgentDefinition) -> None:
@@ -75,10 +75,10 @@ def test_agent_definition_defaults_are_independent(agent: AgentDefinition) -> No
     server = MagicMock(spec=Client)
 
     agent.tools.append(_get_current_date_and_time)
-    agent.mcp_servers.append(server)
+    agent.mcp_clients.append(server)
 
     assert other.tools == []
-    assert other.mcp_servers == []
+    assert other.mcp_clients == []
 
 
 def test_agent_definition_accepts_local_tools_and_mcp_servers() -> None:
@@ -89,11 +89,11 @@ def test_agent_definition_accepts_local_tools_and_mcp_servers() -> None:
         model="test-model",
         instructions="Answer briefly.",
         tools=[_get_current_date_and_time],
-        mcp_servers=[server],
+        mcp_clients=[server],
     )
 
     assert definition.tools == [_get_current_date_and_time]
-    assert definition.mcp_servers == [server]
+    assert definition.mcp_clients == [server]
     server.list_tools.assert_not_called()
 
 

@@ -18,6 +18,7 @@ from _harness_helpers import (
 )
 from mcp.types import CallToolResult
 from openai import omit
+from openai.types.chat import ChatCompletion, ChatCompletionMessageCustomToolCall
 
 from metisa_common.mcp_helper import create_tool
 from metisa_harness.harness import AgentHarness
@@ -38,7 +39,7 @@ def test_run_sends_openai_tool_definitions(
         agent,
         model="gpt4o",
         tools=[_get_current_date_and_time] if include_tools else [],
-        mcp_servers=[server] if include_tools else [],
+        mcp_clients=[server] if include_tools else [],
     )
     client = AsyncMock()
     client.models.list.return_value = SimpleNamespace(data=[])
@@ -106,7 +107,7 @@ def test_run_round_trips_openai_tool_calls_and_results(agent: AgentDefinition) -
         _completion("Checking.", calls=calls, finish_reason="tool_calls"),
         _completion("Done."),
     ]
-    definition = replace(agent, model="gpt4o", tools=[function], mcp_servers=[server])
+    definition = replace(agent, model="gpt4o", tools=[function], mcp_clients=[server])
 
     with (
         patch("metisa_harness._model_resolver.AsyncOpenAI") as factory,
@@ -149,7 +150,10 @@ def test_run_round_trips_openai_tool_calls_and_results(agent: AgentDefinition) -
 @pytest.mark.parametrize(
     ("completion_factory", "error_message"),
     [
-        (lambda: SimpleNamespace(choices=[]), "OpenAI returned no completion choices"),
+        (
+            lambda: _completion_without_choices(),
+            "OpenAI returned no completion choices",
+        ),
         (
             lambda: _completion(None, finish_reason="length"),
             "OpenAI completion ended with: length",
@@ -164,16 +168,7 @@ def test_run_round_trips_openai_tool_calls_and_results(agent: AgentDefinition) -
         ),
         (lambda: _completion(None), "The model returned no final text"),
         (
-            lambda: SimpleNamespace(
-                choices=[
-                    SimpleNamespace(
-                        finish_reason="tool_calls",
-                        message=SimpleNamespace(
-                            content=None, tool_calls=[SimpleNamespace(type="custom")]
-                        ),
-                    )
-                ]
-            ),
+            lambda: _completion_with_custom_tool(),
             "Unsupported tool call type",
         ),
     ],
@@ -188,7 +183,7 @@ def test_run_round_trips_openai_tool_calls_and_results(agent: AgentDefinition) -
 )
 def test_run_rejects_invalid_openai_responses(
     agent: AgentDefinition,
-    completion_factory: Callable[[], SimpleNamespace],
+    completion_factory: Callable[[], ChatCompletion],
     error_message: str,
 ) -> None:
     """Malformed or incomplete responses must not produce a successful run."""
@@ -267,3 +262,22 @@ def test_run_configures_local_discovery_and_completion_requests(
     else:
         assert request["tools"] is omit
     online.chat.completions.create.assert_not_awaited()
+
+
+def _completion_without_choices() -> ChatCompletion:
+    completion = _completion(None)
+    completion.choices = []
+    return completion
+
+
+def _completion_with_custom_tool() -> ChatCompletion:
+    completion = _completion(None, finish_reason="tool_calls")
+    custom_call = ChatCompletionMessageCustomToolCall.model_validate(
+        {
+            "id": "custom-id",
+            "type": "custom",
+            "custom": {"name": "custom-tool", "input": "test input"},
+        }
+    )
+    completion.choices[0].message.tool_calls = [custom_call]
+    return completion

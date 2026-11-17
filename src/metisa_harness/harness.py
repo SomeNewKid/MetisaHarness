@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from ._model_resolver import _get_llm
-from ._tools import _get_tool_registry, _invoke_tool_call
+from ._context_manager import FullHistoryContextBuilder
+from ._model_resolver import get_llm
+from ._tools import get_tool_registry, invoke_tool_call
 from .models import (
     AgentDefinition,
+    ContextBuilder,
     LlmClient,
     LlmMessage,
     RunResult,
@@ -23,6 +25,7 @@ class AgentHarness:
         *,
         input: str,
         llm: LlmClient | None = None,
+        context_builder: ContextBuilder | None = None,
         max_turns: int = 10,
     ) -> RunResult:
         """Run model turns and tools until a final answer is produced."""
@@ -30,17 +33,23 @@ class AgentHarness:
             raise ValueError("max_turns must be at least 1.")
 
         if llm is None:
-            llm = await _get_llm(agent)
+            llm = await get_llm(agent)
 
         if llm is None:
             raise RuntimeError("LLM not available.")
 
-        tool_registry = await _get_tool_registry(agent)
-        tools = [registered.tool for registered in tool_registry.values()]
+        tool_registry = await get_tool_registry(agent)
         messages = [LlmMessage(role="user", content=input)]
+        if context_builder is None:
+            context_builder = FullHistoryContextBuilder()
 
         for _ in range(max_turns):
-            response = await llm.complete(messages=messages, tools=tools)
+            model_context = context_builder.build(
+                agent=agent,
+                tool_registry=tool_registry,
+                messages=messages,
+            )
+            response = await llm.complete(model_context=model_context)
             messages.append(response)
 
             if not response.tool_calls:
@@ -54,7 +63,7 @@ class AgentHarness:
                 return RunResult(final_text=final_text, messages=history)
 
             for tool_call in response.tool_calls:
-                output = await _invoke_tool_call(tool_registry, tool_call)
+                output = await invoke_tool_call(tool_registry, tool_call)
 
                 messages.append(
                     LlmMessage(

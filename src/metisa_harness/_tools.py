@@ -3,8 +3,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from collections.abc import Callable
 
 from jsonschema import validate
 from mcp import Client
@@ -12,21 +11,14 @@ from mcp.types import Tool
 
 from metisa_common.mcp_helper import create_tool
 
-from .models import AgentDefinition, ToolCall
+from .models import AgentDefinition, RegisteredTool, ToolCall
 
 
-@dataclass(frozen=True)
-class _RegisteredTool:
-    """Represent a tool registered with the Metisa Harness."""
-
-    tool: Tool
-    invoke: Callable[[dict[str, object]], Awaitable[str]]
-
-
-async def _invoke_tool_call(
-    tool_registry: dict[str, _RegisteredTool],
+async def invoke_tool_call(
+    tool_registry: dict[str, RegisteredTool],
     tool_call: ToolCall,
 ) -> str:
+    """Invoke the specified tool call using the registered tools."""
     registered = tool_registry.get(tool_call.name)
 
     if registered is None:
@@ -42,16 +34,17 @@ async def _invoke_tool_call(
     return await registered.invoke(arguments)
 
 
-async def _get_tool_registry(
+async def get_tool_registry(
     agent: AgentDefinition,
-) -> dict[str, _RegisteredTool]:
-    registered_tools: list[_RegisteredTool] = []
+) -> dict[str, RegisteredTool]:
+    """Get the tool registry for the specified agent."""
+    registered_tools: list[RegisteredTool] = []
 
     for function in agent.tools:
         registered = _register_local_tool(function)
         registered_tools.append(registered)
 
-    for server in agent.mcp_servers:
+    for server in agent.mcp_clients:
         cursor: str | None = None
 
         while True:
@@ -65,7 +58,7 @@ async def _get_tool_registry(
             if cursor is None:
                 break
 
-    registry: dict[str, _RegisteredTool] = {}
+    registry: dict[str, RegisteredTool] = {}
 
     for registered in registered_tools:
         name = registered.tool.name
@@ -80,7 +73,7 @@ async def _get_tool_registry(
 
 def _register_local_tool(
     function: Callable[..., object],
-) -> _RegisteredTool:
+) -> RegisteredTool:
     tool = create_tool(function)
 
     async def _invoke(arguments: dict[str, object]) -> str:
@@ -96,13 +89,13 @@ def _register_local_tool(
 
         return json.dumps(result, allow_nan=False)
 
-    return _RegisteredTool(tool=tool, invoke=_invoke)
+    return RegisteredTool(tool=tool, invoke=_invoke)
 
 
 def _register_mcp_tool(
     server: Client,
     tool: Tool,
-) -> _RegisteredTool:
+) -> RegisteredTool:
     async def _invoke(arguments: dict[str, object]) -> str:
         result = await server.call_tool(tool.name, arguments)
 
@@ -120,4 +113,4 @@ def _register_mcp_tool(
 
         return json.dumps(payload, allow_nan=False)
 
-    return _RegisteredTool(tool=tool, invoke=_invoke)
+    return RegisteredTool(tool=tool, invoke=_invoke)

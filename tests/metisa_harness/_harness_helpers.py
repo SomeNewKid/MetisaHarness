@@ -5,15 +5,16 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from copy import deepcopy
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 from mcp import Client
 from mcp.types import ListToolsResult, Tool
+from openai.types.chat import ChatCompletion
 
 from metisa_common.mcp_helper import with_output_schema
 from metisa_harness.models import (
     LlmMessage,
+    ModelContext,
     ToolCall,
 )
 
@@ -25,10 +26,8 @@ class _ScriptedLlm:
         self.responses = list(responses)
         self.calls: list[tuple[list[LlmMessage], list[Tool]]] = []
 
-    async def complete(
-        self, *, messages: list[LlmMessage], tools: list[Tool]
-    ) -> LlmMessage:
-        self.calls.append((deepcopy(messages), list(tools)))
+    async def complete(self, *, model_context: ModelContext) -> LlmMessage:
+        self.calls.append((deepcopy(model_context.messages), list(model_context.tools)))
         if not self.responses:
             raise AssertionError("Unexpected model request.")
         response = self.responses.pop(0)
@@ -115,25 +114,34 @@ def _completion(
     *,
     calls: list[ToolCall] | None = None,
     finish_reason: str = "stop",
-) -> SimpleNamespace:
-    return SimpleNamespace(
-        choices=[
-            SimpleNamespace(
-                finish_reason=finish_reason,
-                message=SimpleNamespace(
-                    content=text,
-                    tool_calls=[
-                        SimpleNamespace(
-                            id=item.id,
-                            type="function",
-                            function=SimpleNamespace(
-                                name=item.name,
-                                arguments=item.arguments,
-                            ),
-                        )
+) -> ChatCompletion:
+    payload = {
+        "id": "chatcmpl-test",
+        "object": "chat.completion",
+        "created": 0,
+        "model": "test-model",
+        "choices": [
+            {
+                "index": 0,
+                "finish_reason": finish_reason,
+                "message": {
+                    "role": "assistant",
+                    "content": text,
+                    "tool_calls": [
+                        {
+                            "id": item.id,
+                            "type": "function",
+                            "function": {
+                                "name": item.name,
+                                "arguments": item.arguments,
+                            },
+                        }
                         for item in calls or []
                     ],
-                ),
-            )
-        ]
-    )
+                },
+            }
+        ],
+    }
+    completion = ChatCompletion.model_validate(payload)
+    completion._request_id = "req_test"
+    return completion

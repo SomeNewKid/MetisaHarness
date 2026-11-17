@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
 from datetime import datetime
@@ -11,6 +12,7 @@ from pathlib import Path
 import win32api
 import win32con
 import win32security
+from mcp import Client
 from opentelemetry import trace
 from opentelemetry.context import Context
 from opentelemetry.trace import SpanKind
@@ -31,6 +33,9 @@ from ._helper import (
     print_elapsed_time,
     print_failure,
     print_success,
+)
+from ._mcp_server import (
+    get_mcp_server,
 )
 from ._telemetry import (
     initialize_tracing,
@@ -64,6 +69,12 @@ def main(
 
     os.environ["METISA_RUN_ID"] = run_id
     os.environ["OTEL_SERVICE_NAME"] = "sample_agent"
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s %(name)s: %(message)s",
+    )
+    # logging.getLogger("metisa_harness").setLevel(logging.DEBUG)
 
     if Capability.OTEL_COLLECTOR in specification.capabilities:
         provider, exporter = initialize_tracing()
@@ -141,8 +152,8 @@ async def _run_agent(
         models = [
             "gpt-4o",
             "granite4.1:3b",
-            "granite4.1:8b",
-            "gemma4:12b",
+            # "granite4.1:8b",
+            # "gemma4:12b",
         ]
 
         for model in models:
@@ -153,27 +164,36 @@ async def _run_agent_model(
     model_name: str,
     prompt: str,
 ) -> None:
+    mcp_server = get_mcp_server()
 
-    agent = AgentDefinition(
-        name="sample_agent",
-        model=model_name,
-        instructions="Answer the user's questions.",
-        tools=[get_current_date_time],
-    )
+    async with Client(mcp_server) as mcp_client:
+        agent = AgentDefinition(
+            name="sample_agent",
+            model=model_name,
+            instructions="""
+                Answer the user's question as simply as possible.
+                Provide the answer as plain text, and not as Markdown or JSON.
+                Discover available filenames with get_list_of_available_documents,
+                then retrieve relevant excerpts with get_semantic_chunks_from_document.
+                Check the documents before asking the user to supply a filename.
+                """,
+            tools=[get_current_date_time],
+            mcp_clients=[mcp_client],
+        )
 
-    print()
-    print("-" * 20)
-    print(model_name)
-    print(prompt, flush=True)
-    with print_elapsed_time():
-        try:
-            result = await AgentHarness.run(agent, input=prompt)
-            if result.final_text:
-                print_success(result.final_text)
-            else:
-                raise RuntimeError("No final text returned.")
-        except Exception as error:
-            print_failure(str(error))
+        print()
+        print("-" * 20)
+        print(model_name)
+        print(prompt, flush=True)
+        with print_elapsed_time():
+            try:
+                result = await AgentHarness.run(agent, input=prompt)
+                if result.final_text:
+                    print_success(result.final_text)
+                else:
+                    raise RuntimeError("No final text returned.")
+            except Exception as error:
+                print_failure(str(error))
 
 
 def _create_run_identifier_and_directory() -> tuple[str, Path]:

@@ -39,6 +39,7 @@ def get_current_date_time() -> dict[str, object]:
 
     Day of the week is represented as an integer, where Monday is 1 and Sunday is 7.
     """
+    print("Call to get_current_date_time")
     now = datetime.now().astimezone()
     offset = now.utcoffset()
     offset_minutes = int(offset.total_seconds() / 60) if offset else 0
