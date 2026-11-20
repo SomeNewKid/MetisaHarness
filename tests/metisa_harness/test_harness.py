@@ -36,7 +36,9 @@ def test_run_uses_supplied_llm(agent: AgentDefinition, response: str) -> None:
 
     with patch("metisa_harness.harness.get_llm") as resolver:
         result = asyncio.run(
-            AgentHarness.run(agent, input="Hello.", llm=llm, max_turns=1)
+            AgentHarness.run(
+                agent, run_identifier="run-test", input="Hello.", llm=llm, max_turns=1
+            )
         )
 
     resolver.assert_not_called()
@@ -52,7 +54,9 @@ def test_run_resolves_llm_when_not_supplied(agent: AgentDefinition) -> None:
     llm = _ScriptedLlm(_answer("Resolved response."))
 
     with patch("metisa_harness.harness.get_llm", return_value=llm) as resolver:
-        result = asyncio.run(AgentHarness.run(agent, input="Hello."))
+        result = asyncio.run(
+            AgentHarness.run(agent, run_identifier="run-test", input="Hello.")
+        )
 
     resolver.assert_awaited_once_with(agent)
     assert llm.calls == [([LlmMessage(role="user", content="Hello.")], [])]
@@ -63,7 +67,9 @@ def test_run_raises_when_llm_unavailable(agent: AgentDefinition) -> None:
     """Missing client discovery produces a clear error."""
     with patch("metisa_harness.harness.get_llm", return_value=None):
         with pytest.raises(RuntimeError, match="^LLM not available\\.$"):
-            asyncio.run(AgentHarness.run(agent, input="Hello."))
+            asyncio.run(
+                AgentHarness.run(agent, run_identifier="run-test", input="Hello.")
+            )
 
 
 def test_run_propagates_llm_error(agent: AgentDefinition) -> None:
@@ -72,7 +78,9 @@ def test_run_propagates_llm_error(agent: AgentDefinition) -> None:
     llm = _ScriptedLlm(error)
 
     with pytest.raises(ConnectionError) as caught:
-        asyncio.run(AgentHarness.run(agent, input="Hello.", llm=llm))
+        asyncio.run(
+            AgentHarness.run(agent, run_identifier="run-test", input="Hello.", llm=llm)
+        )
 
     assert caught.value is error
     assert llm.calls == [([LlmMessage(role="user", content="Hello.")], [])]
@@ -86,7 +94,9 @@ def test_run_rejects_missing_final_text(
     llm = _ScriptedLlm(LlmMessage(role="assistant", content=content))
 
     with pytest.raises(RuntimeError, match="^The model returned no final text\\.$"):
-        asyncio.run(AgentHarness.run(agent, input="Hello.", llm=llm))
+        asyncio.run(
+            AgentHarness.run(agent, run_identifier="run-test", input="Hello.", llm=llm)
+        )
 
 
 @pytest.mark.parametrize("max_turns", [0, -1])
@@ -98,7 +108,13 @@ def test_run_rejects_invalid_turn_limit(agent: AgentDefinition, max_turns: int) 
 
     with pytest.raises(ValueError, match="^max_turns must be at least 1\\.$"):
         asyncio.run(
-            AgentHarness.run(definition, input="Hello.", llm=llm, max_turns=max_turns)
+            AgentHarness.run(
+                definition,
+                run_identifier="run-test",
+                input="Hello.",
+                llm=llm,
+                max_turns=max_turns,
+            )
         )
 
     assert llm.calls == []
@@ -125,7 +141,13 @@ def test_run_preserves_history_across_batches_and_repeated_tool_calls(
     definition = replace(agent, tools=[first, second])
 
     result = asyncio.run(
-        AgentHarness.run(definition, input="Compare.", llm=llm, max_turns=3)
+        AgentHarness.run(
+            definition,
+            run_identifier="run-test",
+            input="Compare.",
+            llm=llm,
+            max_turns=3,
+        )
     )
 
     assert result.final_output == "Done."
@@ -171,7 +193,12 @@ def test_run_returns_a_detached_history_snapshot(agent: AgentDefinition) -> None
     )
 
     result = asyncio.run(
-        AgentHarness.run(replace(agent, tools=[function]), input="Lookup.", llm=llm)
+        AgentHarness.run(
+            replace(agent, tools=[function]),
+            run_identifier="run-test",
+            input="Lookup.",
+            llm=llm,
+        )
     )
 
     assert result.messages == expected
@@ -201,7 +228,11 @@ def test_run_keeps_ollama_provider_through_tool_round_trip(
     ]
     definition = replace(agent, model="gpt4o", tools=[function])
 
-    result = asyncio.run(AgentHarness.run(definition, input="Lookup.", max_turns=2))
+    result = asyncio.run(
+        AgentHarness.run(
+            definition, run_identifier="run-test", input="Lookup.", max_turns=2
+        )
+    )
 
     assert result.final_output == "The value is 42."
     assert events == ["lookup:1"]

@@ -27,6 +27,7 @@ from metisa_common.specification_models import (
 from metisa_harness import (
     AgentDefinition,
     AgentHarness,
+    LifecycleEvent,
 )
 
 from ._guardrails import (
@@ -64,7 +65,7 @@ def main(
     argv: list[str] | None = None,
 ) -> int:
     """Run the sample agent workload."""
-    run_id, host_run_directory = _create_run_identifier_and_directory()
+    run_identifier, host_run_directory = _create_run_identifier_and_directory()
     host_output_path = _create_output_directory(host_run_directory, "output")
 
     user_sid = _get_launching_user_sid()
@@ -76,7 +77,7 @@ def main(
     provider = None
     exporter = None
 
-    os.environ["METISA_RUN_ID"] = run_id
+    os.environ["METISA_RUN_ID"] = run_identifier
     os.environ["OTEL_SERVICE_NAME"] = "sample_agent"
 
     default_logging_level = logging.DEBUG if _VERBOSE_LOGGING else logging.WARNING
@@ -101,7 +102,7 @@ def main(
         tracer = trace.get_tracer("sample_agent")
 
         attributes = {
-            "run_id": run_id,
+            "run_id": run_identifier,
             "user_sid": user_sid,
         }
 
@@ -112,7 +113,14 @@ def main(
         ):
             import asyncio
 
-            asyncio.run(_run_agent(specification, host_output_path, prompt))
+            asyncio.run(
+                _run_agent(
+                    specification,
+                    host_output_path,
+                    prompt,
+                    run_identifier,
+                )
+            )
 
         return 0
 
@@ -141,6 +149,7 @@ async def _run_agent(
     specification: MetisaSpecification,
     host_output_path: Path,
     prompt: str,
+    run_identifier: str,
 ) -> None:
     tracer = trace.get_tracer("sample_agent.tests")
 
@@ -154,10 +163,16 @@ async def _run_agent(
             "metisa.reason": "testing tracing",
         },
     ):
+        # Example prompts:
+        # - Look up product code "chair". (Tests guardrails)
+        # - How many company values do we have? (Tests RAG)
+        # - What is the current time? (Tests tools)
+        default_prompt = 'Look up product code "chair".'
+
         prompt_count = 0
         if not prompt:
             if Capability.INTERACTIVE not in specification.capabilities:
-                prompt = 'Look up product code "chair".'
+                prompt = default_prompt
         while not prompt:
             prompt_count += 1
             if prompt_count > 3:
@@ -172,12 +187,13 @@ async def _run_agent(
         ]
 
         for model in models:
-            await _run_agent_model(model, prompt)
+            await _run_agent_model(model, prompt, run_identifier)
 
 
 async def _run_agent_model(
     model_name: str,
     prompt: str,
+    run_identifier: str,
 ) -> None:
     mcp_server = get_mcp_server()
 
@@ -214,7 +230,12 @@ async def _run_agent_model(
         print(prompt, flush=True)
         with print_elapsed_time():
             try:
-                result = await AgentHarness.run(agent, input=prompt)
+                result = await AgentHarness.run(
+                    agent,
+                    run_identifier=run_identifier,
+                    input=prompt,
+                    event_handler=_print_lifecycle_event,
+                )
                 if result.final_output:
                     if agent.output_type is ProductDetails:
                         if isinstance(result.final_output, ProductDetails):
@@ -294,3 +315,24 @@ def _get_first_argument(
         return ""
 
     return args[0]
+
+
+async def _print_lifecycle_event(
+    event: LifecycleEvent,
+) -> None:
+    details = [event.agent_name, event.kind]
+
+    if event.turn is not None:
+        details.append(f"turn={event.turn}")
+
+    if event.turn is not None:
+        details.append(f"turn={event.turn}")
+
+    if event.tool_name is not None:
+        details.append(f"tool={event.tool_name}")
+
+    if event.error_type is not None:
+        details.append(f"error={event.error_type}")
+
+    description = " ".join(details)
+    print(f"{description} [{event.elapsed_seconds:.3f}s]", flush=True)

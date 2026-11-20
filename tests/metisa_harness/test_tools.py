@@ -46,7 +46,9 @@ def test_run_combines_local_tools_and_paginated_mcp_tools(
     )
     llm = _ScriptedLlm(_answer("No tools needed."))
 
-    asyncio.run(AgentHarness.run(definition, input="Hello.", llm=llm))
+    asyncio.run(
+        AgentHarness.run(definition, run_identifier="run-test", input="Hello.", llm=llm)
+    )
 
     assert llm.calls == [
         (
@@ -71,7 +73,12 @@ def test_run_accepts_an_empty_mcp_tool_list(agent: AgentDefinition) -> None:
     llm = _ScriptedLlm(_answer("Hello."))
 
     asyncio.run(
-        AgentHarness.run(replace(agent, mcp_clients=[server]), input="Hello.", llm=llm)
+        AgentHarness.run(
+            replace(agent, mcp_clients=[server]),
+            run_identifier="run-test",
+            input="Hello.",
+            llm=llm,
+        )
     )
 
     assert llm.calls[0][1] == []
@@ -102,7 +109,11 @@ def test_run_rejects_duplicate_tool_names(agent: AgentDefinition, source: str) -
     llm = _ScriptedLlm()
 
     with pytest.raises(ValueError, match=f"^Duplicate tool name: {local.__name__}$"):
-        asyncio.run(AgentHarness.run(definition, input="Hello.", llm=llm))
+        asyncio.run(
+            AgentHarness.run(
+                definition, run_identifier="run-test", input="Hello.", llm=llm
+            )
+        )
 
     assert llm.calls == []
     server.call_tool.assert_not_awaited()
@@ -118,7 +129,12 @@ def test_run_propagates_mcp_discovery_error(agent: AgentDefinition) -> None:
 
     with pytest.raises(ConnectionError) as caught:
         asyncio.run(
-            AgentHarness.run(replace(agent, mcp_clients=[server]), input="Hi", llm=llm)
+            AgentHarness.run(
+                replace(agent, mcp_clients=[server]),
+                run_identifier="run-test",
+                input="Hi",
+                llm=llm,
+            )
         )
 
     assert caught.value is error
@@ -137,7 +153,13 @@ def test_run_invokes_local_tool_and_returns_result_to_model(
     definition = replace(agent, tools=[function])
 
     result = asyncio.run(
-        AgentHarness.run(definition, input="Look it up.", llm=llm, max_turns=2)
+        AgentHarness.run(
+            definition,
+            run_identifier="run-test",
+            input="Look it up.",
+            llm=llm,
+            max_turns=2,
+        )
     )
 
     assert events == ["lookup:7"]
@@ -173,7 +195,11 @@ def test_run_routes_mcp_calls_to_the_correct_tool_and_server(
     llm = _ScriptedLlm(_request(*requests), _answer("Done."))
     definition = replace(agent, mcp_clients=[server, other])
 
-    result = asyncio.run(AgentHarness.run(definition, input="Lookup.", llm=llm))
+    result = asyncio.run(
+        AgentHarness.run(
+            definition, run_identifier="run-test", input="Lookup.", llm=llm
+        )
+    )
 
     assert result.final_output == "Done."
     assert server.call_tool.await_args_list == [
@@ -214,7 +240,12 @@ def test_run_rejects_invalid_tool_requests_before_execution(
 
     with pytest.raises(error_type):
         asyncio.run(
-            AgentHarness.run(replace(agent, tools=[function]), input="Hi", llm=llm)
+            AgentHarness.run(
+                replace(agent, tools=[function]),
+                run_identifier="run-test",
+                input="Hi",
+                llm=llm,
+            )
         )
 
     assert events == []
@@ -232,7 +263,12 @@ def test_run_propagates_local_execution_error(agent: AgentDefinition) -> None:
 
     with pytest.raises(RuntimeError) as caught:
         asyncio.run(
-            AgentHarness.run(replace(agent, tools=[function]), input="Hi", llm=llm)
+            AgentHarness.run(
+                replace(agent, tools=[function]),
+                run_identifier="run-test",
+                input="Hi",
+                llm=llm,
+            )
         )
 
     assert caught.value is error
@@ -250,7 +286,12 @@ def test_run_validates_local_output(agent: AgentDefinition) -> None:
 
     with pytest.raises(ValidationError):
         asyncio.run(
-            AgentHarness.run(replace(agent, tools=[function]), input="Hi", llm=llm)
+            AgentHarness.run(
+                replace(agent, tools=[function]),
+                run_identifier="run-test",
+                input="Hi",
+                llm=llm,
+            )
         )
 
     assert events == ["lookup:1"]
@@ -292,7 +333,12 @@ def test_run_propagates_mcp_tool_failures(
 
     with pytest.raises(error_type):
         asyncio.run(
-            AgentHarness.run(replace(agent, mcp_clients=[server]), input="Hi", llm=llm)
+            AgentHarness.run(
+                replace(agent, mcp_clients=[server]),
+                run_identifier="run-test",
+                input="Hi",
+                llm=llm,
+            )
         )
 
     server.call_tool.assert_awaited_once_with("lookup", {"query": "x"})

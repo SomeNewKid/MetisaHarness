@@ -69,7 +69,10 @@ def test_run_applies_lifecycle_transformations(agent: AgentDefinition) -> None:
 
     result = asyncio.run(
         AgentHarness.run(
-            replace(agent, guardrail_plugins=(plugin,)), input="  Hello.  ", llm=llm
+            replace(agent, guardrail_plugins=(plugin,)),
+            run_identifier="run-test",
+            input="  Hello.  ",
+            llm=llm,
         )
     )
 
@@ -125,7 +128,11 @@ def test_run_guards_each_tool_call(agent: AgentDefinition, source: str) -> None:
     )
     llm = _ScriptedLlm(request, _answer("Done."))
 
-    result = asyncio.run(AgentHarness.run(definition, input="Lookup.", llm=llm))
+    result = asyncio.run(
+        AgentHarness.run(
+            definition, run_identifier="run-test", input="Lookup.", llm=llm
+        )
+    )
 
     expected_events = ["before_tool"]
     if source == "local":
@@ -166,7 +173,11 @@ def test_run_orders_callbacks_and_reuses_plugins(agent: AgentDefinition) -> None
     for name in ("One", "Two"):
         llm = _ScriptedLlm(_answer("Done."))
         definition = replace(agent, name=name, guardrail_plugins=plugins)
-        asyncio.run(AgentHarness.run(definition, input="Start", llm=llm))
+        asyncio.run(
+            AgentHarness.run(
+                definition, run_identifier="run-test", input="Start", llm=llm
+            )
+        )
         assert llm.calls[0][0][0].content == "Start first second third"
 
     assert seen == [("One", "Start"), ("Two", "Start")]
@@ -207,7 +218,11 @@ def test_run_tripwire_aborts_processing(agent: AgentDefinition, stage: str) -> N
     definition = replace(agent, tools=[function], guardrail_plugins=(plugin,))
 
     with pytest.raises(GuardrailTripwire) as caught:
-        asyncio.run(AgentHarness.run(definition, input="Lookup.", llm=llm))
+        asyncio.run(
+            AgentHarness.run(
+                definition, run_identifier="run-test", input="Lookup.", llm=llm
+            )
+        )
 
     assert caught.value is error
     reject.assert_awaited_once()
@@ -235,7 +250,11 @@ def test_run_validates_transformed_tool_payload(
     definition = replace(agent, tools=[function], guardrail_plugins=(plugin,))
 
     with pytest.raises(ValidationError):
-        asyncio.run(AgentHarness.run(definition, input="Lookup.", llm=llm))
+        asyncio.run(
+            AgentHarness.run(
+                definition, run_identifier="run-test", input="Lookup.", llm=llm
+            )
+        )
 
     guardrail.assert_awaited_once()
     assert events == (["lookup:1"] if stage == "after_tool" else [])
@@ -254,6 +273,9 @@ def test_run_rejects_invalid_text_from_output_guardrail(
     with pytest.raises(TypeError, match="An output guardrail returned invalid text"):
         asyncio.run(
             AgentHarness.run(
-                replace(agent, guardrail_plugins=(plugin,)), input="Hello.", llm=llm
+                replace(agent, guardrail_plugins=(plugin,)),
+                run_identifier="run-test",
+                input="Hello.",
+                llm=llm,
             )
         )

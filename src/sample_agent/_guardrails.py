@@ -14,7 +14,7 @@ from metisa_harness.models import (
     ModelContext,
 )
 
-_PRINT_GUARDRAIL_CHANGES = True
+_PRINT_GUARDRAIL_CHANGES = False
 
 
 def create_product_guardrail_plugin() -> GuardrailPlugin:

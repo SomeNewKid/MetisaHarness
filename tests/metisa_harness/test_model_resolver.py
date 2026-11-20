@@ -51,7 +51,11 @@ def test_run_prefers_installed_ollama_models(
         data=[SimpleNamespace(id=name) for name in installed]
     )
 
-    result = asyncio.run(AgentHarness.run(replace(agent, model=requested), input="Hi"))
+    result = asyncio.run(
+        AgentHarness.run(
+            replace(agent, model=requested), run_identifier="run-test", input="Hi"
+        )
+    )
 
     assert result.final_output == "Local answer."
     local.models.list.assert_awaited_once_with()
@@ -73,7 +77,11 @@ def test_run_falls_back_to_online_model_when_not_installed(
         data=[SimpleNamespace(id="granite4.1:3b")]
     )
 
-    result = asyncio.run(AgentHarness.run(replace(agent, model=requested), input="Hi"))
+    result = asyncio.run(
+        AgentHarness.run(
+            replace(agent, model=requested), run_identifier="run-test", input="Hi"
+        )
+    )
 
     assert result.final_output == "Online answer."
     local.models.list.assert_awaited_once_with()
@@ -105,7 +113,11 @@ def test_run_reports_ollama_discovery_failure_without_online_fallback(
     local.models.list.side_effect = error
 
     with pytest.raises(RuntimeError, match="Ollama discovery failed") as caught:
-        asyncio.run(AgentHarness.run(replace(agent, model="gpt4o"), input="Hi"))
+        asyncio.run(
+            AgentHarness.run(
+                replace(agent, model="gpt4o"), run_identifier="run-test", input="Hi"
+            )
+        )
 
     assert caught.value.__cause__ is error
     assert type(error).__name__ in str(caught.value)
@@ -134,7 +146,13 @@ def test_run_reports_missing_or_unreachable_model(
         else "has no configured online model mapping"
     )
     with pytest.raises(RuntimeError, match=expected_error):
-        asyncio.run(AgentHarness.run(replace(agent, model="missing:3b"), input="Hi"))
+        asyncio.run(
+            AgentHarness.run(
+                replace(agent, model="missing:3b"),
+                run_identifier="run-test",
+                input="Hi",
+            )
+        )
 
     local.models.list.assert_awaited_once_with()
     local.chat.completions.create.assert_not_awaited()
@@ -155,7 +173,13 @@ def test_run_does_not_replace_an_explicit_ollama_tag(
     )
 
     with pytest.raises(RuntimeError, match="has no configured online model mapping"):
-        asyncio.run(AgentHarness.run(replace(agent, model="granite4.1:3b"), input="Hi"))
+        asyncio.run(
+            AgentHarness.run(
+                replace(agent, model="granite4.1:3b"),
+                run_identifier="run-test",
+                input="Hi",
+            )
+        )
 
     local.chat.completions.create.assert_not_awaited()
     online.chat.completions.create.assert_not_awaited()
@@ -174,7 +198,11 @@ def test_run_does_not_fall_back_after_local_completion_failure(
     local.chat.completions.create.side_effect = error
 
     with pytest.raises(APIConnectionError) as caught:
-        asyncio.run(AgentHarness.run(replace(agent, model="gpt4o"), input="Hi"))
+        asyncio.run(
+            AgentHarness.run(
+                replace(agent, model="gpt4o"), run_identifier="run-test", input="Hi"
+            )
+        )
 
     assert caught.value is error
     local.models.list.assert_awaited_once_with()
@@ -197,7 +225,11 @@ def test_run_surfaces_unexpected_ollama_discovery_errors(
     local.models.list.side_effect = error
 
     with pytest.raises(APIStatusError) as caught:
-        asyncio.run(AgentHarness.run(replace(agent, model="gpt4o"), input="Hi"))
+        asyncio.run(
+            AgentHarness.run(
+                replace(agent, model="gpt4o"), run_identifier="run-test", input="Hi"
+            )
+        )
 
     assert caught.value is error
     local.chat.completions.create.assert_not_awaited()

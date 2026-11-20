@@ -50,7 +50,9 @@ def test_run_sends_openai_tool_definitions(
         patch("metisa_harness._chat_completions.AsyncOpenAI", new=factory),
     ):
         factory.return_value.__aenter__.return_value = client
-        result = asyncio.run(AgentHarness.run(definition, input="Hello."))
+        result = asyncio.run(
+            AgentHarness.run(definition, run_identifier="run-test", input="Hello.")
+        )
 
     client.chat.completions.create.assert_awaited_once()
     request = client.chat.completions.create.await_args.kwargs
@@ -114,7 +116,11 @@ def test_run_round_trips_openai_tool_calls_and_results(agent: AgentDefinition) -
         patch("metisa_harness._chat_completions.AsyncOpenAI", new=factory),
     ):
         factory.return_value.__aenter__.return_value = client
-        result = asyncio.run(AgentHarness.run(definition, input="Lookup.", max_turns=2))
+        result = asyncio.run(
+            AgentHarness.run(
+                definition, run_identifier="run-test", input="Lookup.", max_turns=2
+            )
+        )
 
     assert result.final_output == "Done."
     assert events == ["local:7"]
@@ -197,7 +203,11 @@ def test_run_rejects_invalid_openai_responses(
     ):
         factory.return_value.__aenter__.return_value = client
         with pytest.raises(RuntimeError, match=error_message):
-            asyncio.run(AgentHarness.run(replace(agent, model="gpt4o"), input="Hi"))
+            asyncio.run(
+                AgentHarness.run(
+                    replace(agent, model="gpt4o"), run_identifier="run-test", input="Hi"
+                )
+            )
 
 
 @pytest.mark.parametrize("include_tools", [False, True])
@@ -218,7 +228,7 @@ def test_run_configures_local_discovery_and_completion_requests(
         tools=[_get_current_date_and_time] if include_tools else [],
     )
 
-    asyncio.run(AgentHarness.run(definition, input="Hello."))
+    asyncio.run(AgentHarness.run(definition, run_identifier="run-test", input="Hello."))
 
     assert factory.call_args_list == [
         call(

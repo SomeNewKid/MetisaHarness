@@ -38,7 +38,12 @@ def test_run_returns_typed_output(agent: AgentDefinition) -> None:
     llm = _ScriptedLlm(_answer(text))
 
     result = asyncio.run(
-        AgentHarness.run(replace(agent, output_type=_Answer), input="Answer.", llm=llm)
+        AgentHarness.run(
+            replace(agent, output_type=_Answer),
+            run_identifier="run-test",
+            input="Answer.",
+            llm=llm,
+        )
     )
 
     assert isinstance(result.final_output, _Answer)
@@ -68,7 +73,11 @@ def test_run_normalizes_dictionary_before_pydantic_validation(
     llm = _ScriptedLlm(_answer('{"value": "42"}'))
     definition = replace(agent, output_type=_Answer, guardrail_plugins=(plugin,))
 
-    result = asyncio.run(AgentHarness.run(definition, input="Answer.", llm=llm))
+    result = asyncio.run(
+        AgentHarness.run(
+            definition, run_identifier="run-test", input="Answer.", llm=llm
+        )
+    )
 
     assert seen == [{"value": "42"}]
     assert result.final_output == _Answer(value=42, label="approved")
@@ -100,7 +109,10 @@ def test_run_rejects_invalid_typed_output_without_retry(
     with pytest.raises(ValidationError):
         asyncio.run(
             AgentHarness.run(
-                replace(agent, output_type=_Answer), input="Answer.", llm=llm
+                replace(agent, output_type=_Answer),
+                run_identifier="run-test",
+                input="Answer.",
+                llm=llm,
             )
         )
 
@@ -128,7 +140,11 @@ def test_run_rejects_non_object_output_before_guardrails(
     definition = replace(agent, output_type=_Answer, guardrail_plugins=(plugin,))
 
     with pytest.raises(error_type):
-        asyncio.run(AgentHarness.run(definition, input="Answer.", llm=llm))
+        asyncio.run(
+            AgentHarness.run(
+                definition, run_identifier="run-test", input="Answer.", llm=llm
+            )
+        )
 
     guardrail.assert_not_awaited()
     assert len(llm.calls) == 1
@@ -154,7 +170,11 @@ def test_run_validates_output_guardrail_replacements(
     definition = replace(agent, output_type=_Answer, guardrail_plugins=(plugin,))
 
     with pytest.raises(error_type):
-        asyncio.run(AgentHarness.run(definition, input="Answer.", llm=llm))
+        asyncio.run(
+            AgentHarness.run(
+                definition, run_identifier="run-test", input="Answer.", llm=llm
+            )
+        )
 
     guardrail.assert_awaited_once()
     assert len(llm.calls) == 1
@@ -169,7 +189,11 @@ def test_run_structured_output_tripwire_propagates(agent: AgentDefinition) -> No
     definition = replace(agent, output_type=_Answer, guardrail_plugins=(plugin,))
 
     with pytest.raises(GuardrailTripwire) as caught:
-        asyncio.run(AgentHarness.run(definition, input="Answer.", llm=llm))
+        asyncio.run(
+            AgentHarness.run(
+                definition, run_identifier="run-test", input="Answer.", llm=llm
+            )
+        )
 
     assert caught.value is error
     assert guardrail.await_args is not None
@@ -202,7 +226,9 @@ def test_run_sends_output_schema_to_model_adapter(
         tools=[tool] if use_tool else [],
     )
 
-    result = asyncio.run(AgentHarness.run(definition, input="Answer."))
+    result = asyncio.run(
+        AgentHarness.run(definition, run_identifier="run-test", input="Answer.")
+    )
 
     assert online.chat.completions.create.await_count == (2 if use_tool else 1)
     for invocation in online.chat.completions.create.await_args_list:

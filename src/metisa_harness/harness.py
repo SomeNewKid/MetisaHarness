@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from copy import deepcopy
 from dataclasses import replace
 
 from ._context_manager import FullHistoryContextBuilder
 from ._guardrails import apply_guardrails
+from ._lifecycle import LifecycleEmitter
 from ._model_resolver import get_llm
 from ._tools import get_tool_registry, invoke_tool_call
 from .guardrails import GuardrailMetadata
+from .lifecycle import EventHandler
 from .models import (
     AgentDefinition,
     ContextBuilder,
@@ -28,10 +31,47 @@ class AgentHarness:
     async def run(
         agent: AgentDefinition,
         *,
+        run_identifier: str,
         input: str,
         llm: LlmClient | None = None,
         context_builder: ContextBuilder | None = None,
         max_turns: int = 10,
+        event_handler: EventHandler | None = None,
+    ) -> RunResult:
+        """Execute an agent and report its lifecycle."""
+        events = LifecycleEmitter(agent.name, run_identifier, event_handler)
+
+        try:
+            await events.emit("run_started")
+
+            result = await AgentHarness._run(
+                agent,
+                input=input,
+                llm=llm,
+                context_builder=context_builder,
+                max_turns=max_turns,
+                events=events,
+            )
+        except asyncio.CancelledError:
+            await events.emit("run_cancelled")
+            raise
+        except Exception as error:
+            error_type = type(error).__name__
+            await events.emit("run_failed", error_type=error_type)
+            raise
+        else:
+            await events.emit("run_completed")
+            return result
+
+    @staticmethod
+    async def _run(
+        agent: AgentDefinition,
+        *,
+        input: str,
+        llm: LlmClient | None = None,
+        context_builder: ContextBuilder | None = None,
+        max_turns: int = 10,
+        events: LifecycleEmitter,
     ) -> RunResult:
         """Run model turns and tools until a final answer is produced."""
         if max_turns < 1:
@@ -70,7 +110,7 @@ class AgentHarness:
         if context_builder is None:
             context_builder = FullHistoryContextBuilder()
 
-        for _ in range(max_turns):
+        for turn in range(1, max_turns + 1):
             model_context = context_builder.build(
                 agent=agent,
                 tool_registry=tool_registry,
@@ -96,7 +136,11 @@ class AgentHarness:
             if not isinstance(model_context, ModelContext):
                 raise RuntimeError("Invalid type for model context.")
 
+            await events.emit("model_started", turn=turn)
+
             response = await llm.complete(model_context=model_context)
+
+            await events.emit("model_completed", turn=turn)
 
             after_model_guardrails = (
                 guardrail
@@ -153,7 +197,25 @@ class AgentHarness:
                 return RunResult(final_output=final_output, messages=history)
 
             for tool_call in response.tool_calls:
-                output = await invoke_tool_call(agent, tool_registry, tool_call)
+                await events.emit(
+                    "tool_started",
+                    turn=turn,
+                    tool_name=tool_call.name,
+                    tool_call_id=tool_call.id,
+                )
+
+                output = await invoke_tool_call(
+                    agent,
+                    tool_registry,
+                    tool_call,
+                )
+
+                await events.emit(
+                    "tool_completed",
+                    turn=turn,
+                    tool_name=tool_call.name,
+                    tool_call_id=tool_call.id,
+                )
 
                 messages.append(
                     LlmMessage(
