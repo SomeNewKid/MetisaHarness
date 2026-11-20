@@ -10,3 +10,11 @@ class ProductDetails(BaseModel):
 
     product_code: str = Field(min_length=1)
     product_name: str = Field(min_length=1)
+
+
+class PhoneNumber(BaseModel):
+    """Provide a phone number."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    phone_number: str = Field(min_length=1, max_length=10)

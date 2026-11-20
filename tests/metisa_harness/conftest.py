@@ -21,6 +21,7 @@ def agent() -> AgentDefinition:
     """Provide a valid agent definition for execution tests."""
     return AgentDefinition(
         name="Assistant",
+        description="Test agent",
         model="test-model",
         instructions="Answer briefly.",
     )

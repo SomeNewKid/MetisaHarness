@@ -49,6 +49,8 @@ from ._telemetry import (
 )
 from ._tools import (
     get_current_date_time,
+    get_email_address,
+    get_phone_number,
     get_product_details,
 )
 
@@ -167,7 +169,8 @@ async def _run_agent(
         # - Look up product code "chair". (Tests guardrails)
         # - How many company values do we have? (Tests RAG)
         # - What is the current time? (Tests tools)
-        default_prompt = 'Look up product code "chair".'
+        # - What is the email address and phone number for Claire? (Agents as tools)
+        default_prompt = "What is the email address and phone number for Claire?"
 
         prompt_count = 0
         if not prompt:
@@ -199,9 +202,26 @@ async def _run_agent_model(
 
     guardrail_plugin = create_product_guardrail_plugin()
 
+    email_agent = AgentDefinition(
+        name="email_agent",
+        description="Retrieve email addresses for users.",
+        model=model_name,
+        instructions="You provide the email address for the specified user.",
+        tools=[get_email_address],
+    )
+
+    phone_agent = AgentDefinition(
+        name="phone_agent",
+        description="Retrieve phone numbers for users.",
+        model=model_name,
+        instructions="You provide the phone number for the specified user.",
+        tools=[get_phone_number],
+    )
+
     async with Client(mcp_server) as mcp_client:
-        agent = AgentDefinition(
+        main_agent = AgentDefinition(
             name="sample_agent",
+            description="Example agent",  # Description really only used for sub-agents
             model=model_name,
             instructions="""
                 Answer the user's question as simply as possible.
@@ -220,6 +240,7 @@ async def _run_agent_model(
                 """,
             tools=[get_current_date_time, get_product_details],
             mcp_clients=[mcp_client],
+            sub_agents=[email_agent, phone_agent],
             guardrail_plugins=(guardrail_plugin,),
             # output_type=ProductDetails,
         )
@@ -231,13 +252,13 @@ async def _run_agent_model(
         with print_elapsed_time():
             try:
                 result = await AgentHarness.run(
-                    agent,
+                    main_agent,
                     run_identifier=run_identifier,
                     input=prompt,
                     event_handler=_print_lifecycle_event,
                 )
                 if result.final_output:
-                    if agent.output_type is ProductDetails:
+                    if main_agent.output_type is ProductDetails:
                         if isinstance(result.final_output, ProductDetails):
                             product_code = result.final_output.product_code
                             product_name = result.final_output.product_name

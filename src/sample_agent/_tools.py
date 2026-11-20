@@ -53,6 +53,46 @@ _PRODUCT_NAMES = {
     "INTERNAL": "  internal prototype   ",
 }
 
+_EMAIL_ADDRESS_RESULT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "email_address": {"type": "string"},
+    },
+    "required": ["email_address"],
+    "additionalProperties": False,
+}
+
+_PHONE_NUMBER_RESULT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "phone_number": {"type": "string"},
+    },
+    "required": ["phone_number"],
+    "additionalProperties": False,
+}
+
+
+@with_output_schema(_EMAIL_ADDRESS_RESULT_SCHEMA)
+def get_email_address(
+    user: str,
+) -> dict[str, object]:
+    """Get the email address for the specified user."""
+    user_name = user.lower().replace(" ", "-")
+    email_address = f"{user_name}@example.com"
+    return {
+        "email_address": email_address,
+    }
+
+
+@with_output_schema(_PHONE_NUMBER_RESULT_SCHEMA)
+def get_phone_number(
+    user: str,
+) -> dict[str, object]:
+    """Get the email address for the specified user."""
+    return {
+        "phone_number": "555-1234",
+    }
+
 
 @with_output_schema(_DATE_TIME_RESULT_SCHEMA)
 def get_current_date_time() -> dict[str, object]:

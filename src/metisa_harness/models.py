@@ -18,10 +18,12 @@ class AgentDefinition:
     """Define an agent."""
 
     name: str
+    description: str
     model: str
     instructions: str
     tools: list[Callable[..., dict[str, object]]] = field(default_factory=list)
     mcp_clients: list[Client] = field(default_factory=list)
+    sub_agents: list[AgentDefinition] = field(default_factory=list)
     guardrail_plugins: tuple[GuardrailPlugin, ...] = ()
     output_type: type[BaseModel] | None = None
 

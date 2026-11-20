@@ -25,6 +25,7 @@ def test_agent_definition_rejects_blank_fields(field_name: str, value: str) -> N
     """Each required field must contain at least one non-whitespace character."""
     fields = {
         "name": "Assistant",
+        "description": "Test agent",
         "model": "test-model",
         "instructions": "Answer briefly.",
     }
@@ -34,6 +35,7 @@ def test_agent_definition_rejects_blank_fields(field_name: str, value: str) -> N
     with pytest.raises(ValueError, match=f"^Agent {field_name} {verb} required\\.$"):
         AgentDefinition(
             name=fields["name"],
+            description=fields["description"],
             model=fields["model"],
             instructions=fields["instructions"],
         )
@@ -43,11 +45,13 @@ def test_agent_definition_preserves_supplied_text() -> None:
     """Validation must preserve surrounding whitespace and instruction layout."""
     agent = AgentDefinition(
         name=" Assistant ",
+        description=" Test agent ",
         model=" test-model ",
         instructions="\n    Answer briefly.\n    Preserve formatting.\n",
     )
 
     assert agent.name == " Assistant "
+    assert agent.description == " Test agent "
     assert agent.model == " test-model "
     assert agent.instructions == "\n    Answer briefly.\n    Preserve formatting.\n"
 
@@ -82,7 +86,12 @@ def test_agent_definition_defaults_to_no_tools_or_servers(
 
 def test_agent_definition_defaults_are_independent(agent: AgentDefinition) -> None:
     """Mutating one agent's defaults must not change another agent."""
-    other = AgentDefinition(name="Other", model="test-model", instructions="Be brief.")
+    other = AgentDefinition(
+        name="Other",
+        description="Test agent",
+        model="test-model",
+        instructions="Be brief.",
+    )
     server = MagicMock(spec=Client)
 
     agent.tools.append(_get_current_date_and_time)
@@ -97,6 +106,7 @@ def test_agent_definition_accepts_local_tools_and_mcp_servers() -> None:
     server = MagicMock(spec=Client)
     definition = AgentDefinition(
         name="Assistant",
+        description="Test agent",
         model="test-model",
         instructions="Answer briefly.",
         tools=[_get_current_date_and_time],

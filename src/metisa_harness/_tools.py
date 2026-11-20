@@ -4,6 +4,7 @@ import asyncio
 import inspect
 import json
 from collections.abc import Callable
+from uuid import uuid4
 
 from jsonschema import validate
 from mcp import Client
@@ -101,6 +102,10 @@ async def get_tool_registry(
             if cursor is None:
                 break
 
+    for sub_agent in agent.sub_agents:
+        registered = _register_sub_agent(sub_agent)
+        registered_tools.append(registered)
+
     registry: dict[str, RegisteredTool] = {}
 
     for registered in registered_tools:
@@ -153,6 +158,86 @@ def _register_mcp_tool(
 
         if tool.output_schema is not None:
             validate(instance=payload, schema=tool.output_schema)
+
+        return payload
+
+    return RegisteredTool(tool=tool, invoke=_invoke)
+
+
+def _register_sub_agent(
+    sub_agent: AgentDefinition,
+) -> RegisteredTool:
+    if sub_agent.sub_agents:
+        raise ValueError(f"Sub-agent {sub_agent.name} cannot delegate to sub-agents.")
+
+    output_type = sub_agent.output_type
+    output_schema = dict[str, object]
+
+    if output_type is None:
+        output_schema = {
+            "type": "object",
+            "properties": {"answer": {"type": "string"}},
+            "required": ["answer"],
+            "additionalProperties": False,
+        }
+    else:
+        output_schema = output_type.model_json_schema(
+            mode="serialization",
+            by_alias=True,
+        )
+
+    tool = Tool(
+        name=sub_agent.name,
+        description=sub_agent.description,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "task": {
+                    "type": "string",
+                    "description": "The task or text to pass to this agent.",
+                },
+            },
+            "required": ["task"],
+            "additionalProperties": False,
+        },
+        output_schema=output_schema,
+    )
+
+    async def _invoke(arguments: dict[str, object]) -> dict[str, object]:
+        # harness.py imports this module, so defer the import until invocation.
+        from .harness import AgentHarness
+
+        task = arguments.get("task")
+        if not isinstance(task, str) or not task.strip():
+            raise ValueError("The sub-agent task must be non-empty text.")
+
+        run_identifier = uuid4().hex
+        result = await AgentHarness.run(
+            sub_agent,
+            run_identifier=run_identifier,
+            input=task,
+        )
+
+        answer = result.final_output
+
+        if output_type is None:
+            if not isinstance(answer, str):
+                raise TypeError(f"Sub-agent {sub_agent.name} returned non-text output.")
+
+            return {
+                "answer": answer,
+            }
+
+        if not isinstance(answer, output_type):
+            raise TypeError(
+                f"Sub-agent {sub_agent.name} returned an unexpected model type."
+            )
+
+        payload = answer.model_dump(mode="json", by_alias=True)
+        if not isinstance(payload, dict):
+            raise TypeError(
+                f"Sub-agent {sub_agent.name} must serialize to a JSON object."
+            )
 
         return payload
 
