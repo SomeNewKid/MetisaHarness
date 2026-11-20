@@ -52,6 +52,7 @@ from ._tools import (
     get_email_address,
     get_phone_number,
     get_product_details,
+    issue_refund,
 )
 
 _VERBOSE_LOGGING = False
@@ -170,7 +171,9 @@ async def _run_agent(
         # - How many company values do we have? (Tests RAG)
         # - What is the current time? (Tests tools)
         # - What is the email address and phone number for Claire? (Agents as tools)
-        default_prompt = "What is the email address and phone number for Claire?"
+        # - Issue a refund for $75.40. (Human in the loop approval)
+        #   (over $50 requires approval, and over $100 is automatically rejected)
+        default_prompt = "Issue a refund for $75.40."
 
         prompt_count = 0
         if not prompt:
@@ -238,7 +241,7 @@ async def _run_agent_model(
                 If you cannot find the answer, explain what documents were checked and
                 which tools were used, before stating that the answer is not available.
                 """,
-            tools=[get_current_date_time, get_product_details],
+            tools=[get_current_date_time, get_product_details, issue_refund],
             mcp_clients=[mcp_client],
             sub_agents=[email_agent, phone_agent],
             guardrail_plugins=(guardrail_plugin,),

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import replace
 
 from metisa_harness.guardrails import (
@@ -22,15 +23,30 @@ def create_product_guardrail_plugin() -> GuardrailPlugin:
 
     return GuardrailPlugin(
         name="product_lookup",
-        before_run=(_check_length_of_input,),
-        after_run=(_append_warning_for_agent_output,),
-        before_model=(_disallow_prompt_injection,),
+
+        before_run=(
+            _check_length_of_input,
+        ),
+        after_run=(
+            _append_warning_for_agent_output,
+        ),
+
+        before_model=(
+            _disallow_prompt_injection,
+        ),
         after_model=(
             _disallow_blocked_response,
             _modify_hello_world_response,
         ),
-        before_tool=(_normalize_product_arguments, _block_internal_product),
-        after_tool=(_normalize_product_result,),
+
+        before_tool=(
+            _normalize_product_arguments, 
+            _block_internal_product,
+            _approve_refund,
+        ),
+        after_tool=(
+            _normalize_product_result,
+        ),
     )
 
 
@@ -172,3 +188,30 @@ async def _modify_hello_world_response(
             return replace(message, content=normalized_text)
 
     return message
+
+
+async def _approve_refund(
+    context: GuardrailContext[dict[str, object]],
+) -> dict[str, object]:
+    arguments = context.payload
+
+    refund_amount_cents = arguments.get("refund_amount_cents")
+    if not isinstance(refund_amount_cents, int):
+        raise GuardrailTripwire(
+            "Refund amount must be specified in cents as an integer.")
+
+    if refund_amount_cents <= 0:
+        raise GuardrailTripwire(
+            "Refund amount must be greater than zero.")    
+
+    if refund_amount_cents > 100_00:
+        raise GuardrailTripwire(
+            "Refund amount cannot exceed $100.00.")
+
+    if refund_amount_cents > 50_00:
+        prompt = f"Approve the refund of ${refund_amount_cents / 100:.2f}?"
+        answer = await asyncio.to_thread(input, prompt)
+        if answer.lower() not in ("y", "yes"):
+            raise GuardrailTripwire("Refund not approved by user.")
+
+    return arguments

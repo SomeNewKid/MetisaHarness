@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime
+from uuid import uuid4
 
 from metisa_common.mcp_helper import with_output_schema
 
@@ -68,6 +69,15 @@ _PHONE_NUMBER_RESULT_SCHEMA = {
         "phone_number": {"type": "string"},
     },
     "required": ["phone_number"],
+    "additionalProperties": False,
+}
+
+_ISSUE_REFUND_RESULT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "refund_id": {"type": "string"},
+    },
+    "required": ["refund_id"],
     "additionalProperties": False,
 }
 
@@ -144,3 +154,14 @@ def get_product_details(
     )
 
     return result
+
+
+@with_output_schema(_ISSUE_REFUND_RESULT_SCHEMA)
+def issue_refund(
+    refund_amount_cents: int,
+) -> dict[str, object]:
+    """Issue a refund with the specified refund amount, in cents."""
+    refund_id = f"refund_{uuid4().hex}"
+    return {
+        "refund_id": refund_id,
+    }

@@ -35,5 +35,5 @@ class Guardrail(Protocol[_Payload]):
         self,
         context: GuardrailContext[_Payload],
     ) -> _Payload:
-        """Return the accept payload or raise a GuardrailTripwire."""
+        """Return the accepted payload or raise a GuardrailTripwire."""
         ...
