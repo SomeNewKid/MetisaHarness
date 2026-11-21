@@ -8,6 +8,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
+from textwrap import dedent
 
 import win32api
 import win32con
@@ -52,16 +53,19 @@ from ._tools import (
     get_email_address,
     get_phone_number,
     get_product_details,
+    get_robot_battery_charge,
+    get_robot_motor_temperature,
     issue_refund,
 )
 
 _VERBOSE_LOGGING = False
+_PRINT_LIFECYCLE_EVENTS = False
 
-root_directory = Path(__file__).parent
-metisa_json_path = root_directory / "metisa.toml"
-if not metisa_json_path.is_file():
+_root_directory = Path(__file__).parent
+_metisa_json_path = _root_directory / "metisa.toml"
+if not _metisa_json_path.is_file():
     raise FileNotFoundError("Sample Agent missing a metisa.toml file.")
-specification: MetisaSpecification = load_specification(metisa_json_path)
+specification: MetisaSpecification = load_specification(_metisa_json_path)
 
 
 def main(
@@ -173,7 +177,9 @@ async def _run_agent(
         # - What is the email address and phone number for Claire? (Agents as tools)
         # - Issue a refund for $75.40. (Human in the loop approval)
         #   (over $50 requires approval, and over $100 is automatically rejected)
-        default_prompt = "Issue a refund for $75.40."
+        # - Can the robot named Bolt enter the race? (Test skills.)
+        # - Can the robot named Alice be placed in storage? (Test skills with scripts)
+        default_prompt = "Can the robot named Alice be placed in storage?"
 
         prompt_count = 0
         if not prompt:
@@ -226,7 +232,7 @@ async def _run_agent_model(
             name="sample_agent",
             description="Example agent",  # Description really only used for sub-agents
             model=model_name,
-            instructions="""
+            instructions=dedent("""
                 Answer the user's question as simply as possible.
                 Provide the answer as plain text, and not as Markdown or JSON.
                 Discover the date and time with get_current_date_time.
@@ -236,15 +242,25 @@ async def _run_agent_model(
                 For product questions, call get_product_details,
                 passing the product code exactly as supplied by the user,
                 including its capitalization and surrounding spaces.
+                For robot inspections, identify the matching skill and 
+                follow its checklist.  If you cannot load the checklist or
+                a required reference, stop and explain the failure.
                 Do not guess the answer if it is not available in the documents 
                 or through the tools.
                 If you cannot find the answer, explain what documents were checked and
                 which tools were used, before stating that the answer is not available.
-                """,
-            tools=[get_current_date_time, get_product_details, issue_refund],
+                """),
+            tools=[
+                get_current_date_time,
+                get_product_details,
+                get_robot_battery_charge,
+                get_robot_motor_temperature,
+                issue_refund,
+            ],
             mcp_clients=[mcp_client],
             sub_agents=[email_agent, phone_agent],
             guardrail_plugins=(guardrail_plugin,),
+            skills_directory=_root_directory / "skills",
             # output_type=ProductDetails,
         )
 
@@ -344,6 +360,9 @@ def _get_first_argument(
 async def _print_lifecycle_event(
     event: LifecycleEvent,
 ) -> None:
+    if not _PRINT_LIFECYCLE_EVENTS:
+        return
+
     details = [event.agent_name, event.kind]
 
     if event.turn is not None:

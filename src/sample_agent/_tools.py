@@ -81,6 +81,24 @@ _ISSUE_REFUND_RESULT_SCHEMA = {
     "additionalProperties": False,
 }
 
+_ROBOT_TEMPERATURE_RESULT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "temperature": {"type": "number"},
+    },
+    "required": ["temperature"],
+    "additionalProperties": False,
+}
+
+_ROBOT_BATTERY_RESULT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "battery": {"type": "number"},
+    },
+    "required": ["battery"],
+    "additionalProperties": False,
+}
+
 
 @with_output_schema(_EMAIL_ADDRESS_RESULT_SCHEMA)
 def get_email_address(
@@ -164,4 +182,32 @@ def issue_refund(
     refund_id = f"refund_{uuid4().hex}"
     return {
         "refund_id": refund_id,
+    }
+
+
+@with_output_schema(_ROBOT_BATTERY_RESULT_SCHEMA)
+def get_robot_battery_charge(
+    robot_name: str,
+) -> dict[str, object]:
+    """Get the battery charge for the named robot."""
+    if not robot_name.strip():
+        raise ValueError("Robot name is required.")
+
+    charge = 82 if robot_name.lower() == "bolt" else 50
+    return {
+        "battery": charge,
+    }
+
+
+@with_output_schema(_ROBOT_TEMPERATURE_RESULT_SCHEMA)
+def get_robot_motor_temperature(
+    robot_name: str,
+) -> dict[str, object]:
+    """Get the motor temperature for the named robot."""
+    if not robot_name.strip():
+        raise ValueError("Robot name is required.")
+
+    temperature = 31 if robot_name.lower() == "bolt" else 32
+    return {
+        "temperature": temperature,
     }

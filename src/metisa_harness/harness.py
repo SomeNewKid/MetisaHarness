@@ -11,6 +11,7 @@ from ._context_manager import FullHistoryContextBuilder
 from ._guardrails import apply_guardrails
 from ._lifecycle import LifecycleEmitter
 from ._model_resolver import get_llm
+from ._skills import get_skill_catalog
 from ._tools import get_tool_registry, invoke_tool_call
 from .guardrails import GuardrailMetadata
 from .lifecycle import EventHandler
@@ -83,7 +84,9 @@ class AgentHarness:
         if llm is None:
             raise RuntimeError("LLM not available.")
 
-        tool_registry = await get_tool_registry(agent)
+        skill_catalog = get_skill_catalog(agent)
+
+        tool_registry = await get_tool_registry(agent, skill_catalog)
 
         output_schema = None
         if agent.output_type is not None:
@@ -110,15 +113,27 @@ class AgentHarness:
         if context_builder is None:
             context_builder = FullHistoryContextBuilder()
 
+        skill_section = ""
+        if skill_catalog:
+            skill_lines: list[str] = ["Available skills:"]
+            skill_lines.extend(
+                [f"- {skill.name}: {skill.description}" for skill in skill_catalog]
+            )
+            skill_section = "\n".join(skill_lines)
+
         for turn in range(1, max_turns + 1):
             model_context = context_builder.build(
                 agent=agent,
                 tool_registry=tool_registry,
                 messages=messages,
             )
+            instructions = model_context.instructions
+            if skill_section:
+                instructions += f"\n{skill_section}"
             model_context = replace(
                 model_context,
                 output_schema=output_schema,
+                instructions=instructions,
             )
 
             before_model_guardrails = (

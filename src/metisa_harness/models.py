@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Literal, Protocol
 
 from mcp import Client
@@ -24,7 +25,9 @@ class AgentDefinition:
     tools: list[Callable[..., dict[str, object]]] = field(default_factory=list)
     mcp_clients: list[Client] = field(default_factory=list)
     sub_agents: list[AgentDefinition] = field(default_factory=list)
+    skills_directory: Path | None = None
     guardrail_plugins: tuple[GuardrailPlugin, ...] = ()
+
     output_type: type[BaseModel] | None = None
 
     def __post_init__(self) -> None:
@@ -121,3 +124,13 @@ class GuardrailPlugin:
 
     before_tool: tuple[Guardrail[dict[str, object]], ...] = ()
     after_tool: tuple[Guardrail[dict[str, object]], ...] = ()
+
+
+@dataclass
+class AgentSkill:
+    """Represent a single agent skill."""
+
+    name: str
+    description: str
+    content: str
+    directory: Path
